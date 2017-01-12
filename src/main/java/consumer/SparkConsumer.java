@@ -2,7 +2,6 @@ package consumer;
 
 import java.io.Serializable;
 import java.util.ArrayList;
-
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
@@ -19,6 +18,8 @@ import org.apache.spark.streaming.kafka010.ConsumerStrategies;
 import org.apache.spark.streaming.kafka010.KafkaUtils;
 import org.apache.spark.streaming.kafka010.LocationStrategies;
 import org.bson.Document;
+import org.json.JSONArray;
+import org.json.JSONTokener;
 
 import com.mongodb.spark.MongoSpark;
 
@@ -30,9 +31,7 @@ import com.mongodb.spark.MongoSpark;
  */
 public class SparkConsumer implements Serializable {
 	public static void main(String[] args) throws InterruptedException {
-		SparkConf conf = new SparkConf()
-				.setMaster("local[*]")
-				.setAppName("SparkBuzzwords")
+		SparkConf conf = new SparkConf().setMaster("local[*]").setAppName("SparkBuzzwords")
 				.set("spark.mongodb.output.uri", "mongodb://127.0.0.1/spktest.transactions");
 		jssc = new JavaStreamingContext(conf, Durations.seconds(1));
 		(new SparkConsumer()).execute();
@@ -60,16 +59,41 @@ public class SparkConsumer implements Serializable {
 		jssc.awaitTermination();
 	}
 
-	// TODO: 
-	//  As listening to Stream, only saving record at a time to MongoDB.s
-	//  Ideally want to get a batch of records and save as group?
+	/**
+	 * based on topic do some magic and save to collection
+	 * producer is producing JSONArrays 
+	 * @param record
+	 */
 	private void saveRecord(ConsumerRecord<String, String> record) {
-		List<Document> documents = new ArrayList<Document>();
-		documents.add(Document.parse(record.value()));
-		System.out.println("==Saving record '" + record.key() + "' to MongoDB==");
-		MongoSpark.save(jssc.sparkContext().parallelize(documents));
+
+		switch (record.topic()) {
+		case "Customer":
+			/*
+			 * TODO
+			 */
+			break;
+		case "Transaction":
+			List<Document> documents = new ArrayList<Document>();
+			JSONArray jArray = (JSONArray) new JSONTokener(record.value()).nextValue();
+			for (int i = 0; i < jArray.length(); i++) {
+				documents.add(Document.parse(jArray.get(i).toString()));
+			}
+
+			System.out.println("==Saving record '" + record.key() + "' to MongoDB==");
+			MongoSpark.save(jssc.sparkContext().parallelize(documents));
+
+			break;
+		case "Account":
+			/*
+			 * TODO
+			 */
+			break;
+
+		default:
+			break;
+		}
 	}
-	
+
 	private static JavaStreamingContext jssc = null;
 	private static final long serialVersionUID = 985258810331654697L;
 }

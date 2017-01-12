@@ -1,8 +1,8 @@
 # BuzzETL
 created by 
-- Tim Biedenkapp (SA)
-- Paul Done (SA)
 - Raúl Marín Pérez (CE)
+- Paul Done (SA)
+- Tim Biedenkapp (SA)
 
 ##install kafka with brew
 ###MAC
