@@ -1,16 +1,18 @@
 package producer;
 
+import java.io.File;
 import java.io.IOException;
-import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
-import java.net.ProtocolException;
-import java.net.URL;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Properties;
 
-import org.apache.commons.io.IOUtils;
+import org.apache.commons.io.FileUtils;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import org.json.JSONTokener;
 
 /**
  * TODO: multi thread approach - simulate multi producers
@@ -35,50 +37,72 @@ public class SimpleProducer {
 		/*
 		 * Define new Kafka producer
 		 */
+		@SuppressWarnings("resource")
 		Producer<String, String> producer = new KafkaProducer<>(props);
 
-		/**
-		 * parallel generation of messages (variable produceMessages) 
-		 * 
-		 * generated messages are based on mockaroo api and producing array of JSON entries 
+		/*
+		 * parallel generation of messages
 		 */
-		int produceMessages = 100000;
 		Thread transactionThread = new Thread(new Runnable() {
 			public void run() {
 				String topic = "Transaction";
-				for (int i = 0; i < produceMessages; i++) {
-					System.out.println("Transaction procuded");
-					producer.send(new ProducerRecord<String, String>(topic, Integer.toString(i),
-							getMockarooData("ETLSpark_Transactions", 5)));
+				List<JSONObject> transactions = new ArrayList<JSONObject>();
+				initJSONData("ETLSpark_Transactions.json", transactions);
+				for (int i = 0; i < transactions.size(); i++) {
+					if (i % 200 == 0) {
+						System.out.println("200 Transaction Messages procuded");
+						try {
+							Thread.sleep(1000);
+						} catch (InterruptedException e) {
+							e.printStackTrace();
+						}
+					}
+					producer.send(new ProducerRecord<String, String>(topic, Integer.toString(i), transactions.get(i).toString()));
 				}
 			}
 		});
 
+		/*
+		 * parallel generation of messages
+		 */
 		Thread customerThread = new Thread(new Runnable() {
 			public void run() {
 				String topic = "Customer";
-				for (int i = 0; i < produceMessages; i++) {
-					System.out.println("Customer procuded");
-					producer.send(new ProducerRecord<String, String>(topic, Integer.toString(i),
-							getMockarooData("ETLSpark_Customer", 5)));
+				List<JSONObject> customer = new ArrayList<JSONObject>();
+				initJSONData("ETLSpark_Customer.json", customer);
+				for (int i = 0; i < customer.size(); i++) {
+					if (i % 200 == 0) {
+						System.out.println("200 Customer Messages procuded");
+						try {
+							Thread.sleep(1000);
+						} catch (InterruptedException e) {
+							e.printStackTrace();
+						}
+					}
+					producer.send(new ProducerRecord<String, String>(topic, Integer.toString(i), customer.get(i).toString()));
 				}
 			}
 		});
 
+		/*
+		 * parallel generation of messages (variable produceMessages)
+		 * 
+		 * generated messages are based on mockaroo api
+		 */
+		int produceMessages = 100000;
 		Thread accountThread = new Thread(new Runnable() {
 			public void run() {
 				String topic = "Account";
 				for (int i = 0; i < produceMessages; i++) {
 					System.out.println("Account procuded");
-					producer.send(new ProducerRecord<String, String>(topic, Integer.toString(i),
-							getRandomTransactionJSON(i)));
+					producer.send(new ProducerRecord<String, String>(topic, Integer.toString(i), getRandomTransactionJSON(i)));
 				}
 			}
 		});
 
 		transactionThread.start();
 		customerThread.start();
-//		accountThread.start();
+		accountThread.start();
 
 	}
 
@@ -90,9 +114,8 @@ public class SimpleProducer {
 	 * @return random transaction message
 	 */
 	public static String getRandomTransactionJSON(int i) {
-		return "{" + "id: " + i + ", " + "ts: {\"$date\": \"" + getRandomTimeStamp() + "\"}, " + "balance: "
-				+ ((int) (Math.random() * 5000)) + ", " + "desc: \"" + "DescriptionXXX" + "\", "
-				+ "date: {\"$date\": \"" + getRandomTimeStamp() + "\"}, " + "amount: " + ((int) (Math.random() * 1000))
+		return "{" + "id: " + i + ", " + "ts: {\"$date\": \"" + getRandomTimeStamp() + "\"}, " + "balance: " + ((int) (Math.random() * 5000)) + ", "
+				+ "desc: \"" + "DescriptionXXX" + "\", " + "date: {\"$date\": \"" + getRandomTimeStamp() + "\"}, " + "amount: " + ((int) (Math.random() * 1000))
 				+ "}";
 	}
 
@@ -102,34 +125,23 @@ public class SimpleProducer {
 		return "2014-12-12T10:39:40Z";
 	}
 
-	/**
-	 * connect to mockaroo api (thanks to Benjamin Lorenz) and generate based on defined templates sample records 
-	 * 
-	 * @param schema - predefined schmea (currently only ETLSpark_Customer or ETLSpark_Transaction)
-	 * @param count - amount of JSON inside a generated array [{JSON1}, {JSON2}, ...]
-	 * @return
+	/*
+	 * load Data from JSON Files to given list
 	 */
-	public static String getMockarooData(String schema, int count) {
-		URL url;
-		String input = "";
+	private static void initJSONData(String filename, List<JSONObject> list) {
+
 		try {
-			//api key 45839d40
-			//http://www.mockaroo.com/api/generate.json?key=45839d40&schema=tim_test&count=5
-			url = new URL("http://www.mockaroo.com/api/generate.json?key=45839d40&schema="+schema+"&count="+count);
-			HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-			conn.setDoOutput(true);
-			conn.setRequestMethod("POST");
-			conn.setRequestProperty("Content-Type", "application/json");
-			
-			input = IOUtils.toString(conn.getInputStream(), "UTF-8");
-		} catch (MalformedURLException e) {
-			e.printStackTrace();
-		} catch (ProtocolException e) {
-			e.printStackTrace();
+			// init transactions list
+			String transactionsContent = FileUtils.readFileToString(new File(filename), "UTF-8");
+
+			JSONArray jArray = (JSONArray) new JSONTokener(transactionsContent).nextValue();
+			for (int i = 0; i < jArray.length(); i++) {
+				list.add((JSONObject) jArray.get(i));
+			}
+
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
-		return input;
 
 	}
 
