@@ -3,7 +3,7 @@ package main;
 import consumer.SparkConsumer;
 import producer.SimpleProducer;
 
-public class Start {
+public class DemoStart {
 	public static void main(String[] args) {
 		try {
 			/*

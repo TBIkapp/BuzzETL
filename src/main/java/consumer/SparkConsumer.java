@@ -31,7 +31,7 @@ import com.mongodb.spark.MongoSpark;
 /**
  * Spark Kafka consumer - listen to customer, account and transaction topics
  * aggregates 10 records from Kafka, those records will be scanned with Spark on suspicious records
- * records will be written to MongoDB in chunks of 10 records  
+ * records will be written to MongoDB in micro batches of 10 records  
  * 
  * @see https://spark.apache.org/docs/latest/streaming-kafka-0-10-integration.html
  * @see https://docs.mongodb.com/spark-connector/v1.1/java-api/
@@ -47,6 +47,9 @@ public class SparkConsumer implements Serializable, Runnable {
 	 */
 	public void execute() throws InterruptedException {
 		Map<String, Object> kafkaParams = new HashMap<>();
+		/*
+		 * Make this configurable 
+		 */
 		kafkaParams.put("bootstrap.servers", "127.0.0.1:9092");
 		kafkaParams.put("key.deserializer", StringDeserializer.class);
 		kafkaParams.put("value.deserializer", StringDeserializer.class);
@@ -55,9 +58,15 @@ public class SparkConsumer implements Serializable, Runnable {
 		kafkaParams.put("enable.auto.commit", false);
 		Collection<String> topics = Arrays.asList("Customer", "Transaction", "Account");
 
+		/*
+		 * Kafka stream listen to topics
+		 */
 		final JavaInputDStream<ConsumerRecord<String, String>> stream = KafkaUtils.createDirectStream(jssc, LocationStrategies.PreferConsistent(),
 				ConsumerStrategies.<String, String>Subscribe(topics, kafkaParams));
 
+		/*
+		 * stream each record to business logic
+		 */
 		stream.foreachRDD(rdd -> {
 			rdd.foreach(record -> saveRecord(record));
 		});
@@ -71,6 +80,7 @@ public class SparkConsumer implements Serializable, Runnable {
 	 * 
 	 * @param record
 	 */
+	@SuppressWarnings("unchecked")
 	private void saveRecord(ConsumerRecord<String, String> record) {
 		JSONParser parser = new JSONParser();
 		JSONObject jsonObject = null;
@@ -84,7 +94,10 @@ public class SparkConsumer implements Serializable, Runnable {
 				jsonObject = (JSONObject) parser.parse(record.value());
 				if (customerDocuments.size() == 10) {
 					// System.out.println("==Saving 10 records to MongoDB==");
-					MongoSpark.save(jssc.sparkContext().parallelize(transactionDocuments));
+					/**
+					 * ETL Logic / Tasks happen here
+					 */
+					MongoSpark.save(jssc.sparkContext().parallelize(customerDocuments));
 					customerDocuments = new ArrayList<Document>();
 				}
 				customerDocuments.add(Document.parse(jsonObject.toString()));
@@ -95,9 +108,16 @@ public class SparkConsumer implements Serializable, Runnable {
 				 */
 				jsonObject = (JSONObject) parser.parse(record.value());
 				try {
+					/**
+					 * ETL Logic / Tasks happen here
+					 * 
+					 * scan transactions for suspicious or threshold exceeding transaction
+					 */
 					BigDecimal amount = parseCurrency(jsonObject.get("amount").toString(), Locale.US);
-					if (amount.intValue() > 990)
+					if (amount.intValue() > 990){
 						System.out.println("found suspicious high transaction amount " + amount + " on transcation id " + jsonObject.get("id"));
+						jsonObject.put("suspicious", "true");
+					}
 				} catch (java.text.ParseException e) {
 					e.printStackTrace();
 				}

@@ -21,8 +21,11 @@ public class SimpleProducer {
 
 	public static void main(String[] args) throws Exception {
 		/*
-		 * Setup Kafka properties
+		 * This a demo producer - could be any tool on any machine like a mainframe - CDC approach
+		 *  
+		 * Setup Kafka properties and topics
 		 * 
+		 * TODO Make this configurable
 		 */
 		Properties props = new Properties();
 		props.put("bootstrap.servers", "127.0.0.1:9092");
@@ -41,7 +44,9 @@ public class SimpleProducer {
 		Producer<String, String> producer = new KafkaProducer<>(props);
 
 		/*
-		 * parallel generation of messages
+		 * parallel generation of JSON messages on Transaction topic
+		 * 
+		 * this could also include business logic, projection, aggregation, etc.
 		 */
 		Thread transactionThread = new Thread(new Runnable() {
 			public void run() {
@@ -63,7 +68,7 @@ public class SimpleProducer {
 		});
 
 		/*
-		 * parallel generation of messages
+		 * parallel generation of customer topic messages 
 		 */
 		Thread customerThread = new Thread(new Runnable() {
 			public void run() {
@@ -94,7 +99,7 @@ public class SimpleProducer {
 			public void run() {
 				String topic = "Account";
 				for (int i = 0; i < produceMessages; i++) {
-					System.out.println("Account procuded");
+//					System.out.println("Account procuded");
 					producer.send(new ProducerRecord<String, String>(topic, Integer.toString(i), getRandomTransactionJSON(i)));
 				}
 			}
